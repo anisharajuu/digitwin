@@ -203,13 +203,14 @@ assets:
     manufacturer: Vesselcraft
     model: VC-60S
     commissioned: 2019-06-11
-    position: [21, 0, 0]
+    position: [23, 0, 0]
     design:
-      volume_m3: 900.0
-      diameter_m: 11.0
+      volume_m3: 500.0
+      diameter_m: 9.0
       initial_level_pct: 41.0
       # Road-tanker export slot: a commercial schedule, not a process
       # response. Held exogenous so both twin copies export in lockstep.
-      export_cycle_h: 6.0
-      export_window_h: 1.5
-      export_rate_m3h: 427.0
+      # Rate x window is sized to clear one cycle's production exactly.
+      export_cycle_h: 3.0
+      export_window_h: 1.0
+      export_rate_m3h: 320.0

@@ -45,10 +45,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         history_points=settings.history_points,
         warmup_ticks=settings.warmup_ticks,
     )
-    # Settle the dynamic states before anything is served, so the residual
-    # detectors characterise a steady plant rather than a startup transient.
-    engine.prime(settle_ticks=400)
-    engine.tick()
+    # Settle, then warm the detectors, before anything is served. The twin
+    # answers its very first request with real history and a live detector.
+    started = time.perf_counter()
+    engine.prime()
+    print(
+        f"twin-core: primed in {(time.perf_counter() - started) * 1000:.0f} ms "
+        f"({engine.tick_count} ticks, {engine.store.size()} points, "
+        f"detectors ready: {engine.anomaly.ready})"
+    )
     app.state.engine = engine
     app.state.started_at = time.time()
     engine.start(interval=settings.tick_seconds)

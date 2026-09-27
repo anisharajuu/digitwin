@@ -2,9 +2,14 @@
 
 Each tick runs the plant twice. The *real* pass carries the accumulated wear
 and any injected faults, and its output has measurement noise added - that is
-what a historian would have recorded. The *reference* pass runs the identical
-operating conditions through as-new models with every degradation level pinned
-to zero, and it stays noise-free - that is what the machine should have done.
+what a historian would have recorded. The *reference* pass runs each asset
+as-new, fed the conditions its real counterpart actually measured, with every
+degradation level pinned to zero and no noise - that is what that machine
+should have done under exactly the operating point it saw.
+
+Feeding the reference the *measured* inputs rather than letting it simulate a
+parallel plant is what keeps the diagnosis local: a worn pump shows up as a
+pump residual, not as a reactor residual caused by the reactor being starved.
 
 Two passes rather than one is the whole design. It means no symptom anywhere
 in this service is hard-coded: the residual that raises an alert is a genuine
@@ -44,7 +49,7 @@ from ..domain.models import (
 from ..store.timeseries import TimeSeriesStore
 from .degradation import DegradationSet
 from .faults import ActiveFault, FaultManager
-from .physics import AssetModel, Bus, SimContext, Tag, build_model
+from .physics import AssetModel, Bus, ObserverBus, SimContext, Tag, build_model
 
 
 def _measure(tag: Tag, value: float, rng: random.Random) -> float:
@@ -94,13 +99,16 @@ class TwinEngine:
         self.sim_time = 0.0
         self.started_wall = time.time()
 
+        self.warmup_ticks = warmup_ticks
         self.store = TimeSeriesStore(capacity=history_points)
         self.anomaly = AnomalyEngine(warmup=warmup_ticks)
         self.rul = RulEngine(sample_every_seconds=max(300.0, dt * 8))
         self.faults = FaultManager()
 
         self._bus = Bus()
-        self._ref_bus = Bus()
+        # The reference pass observes the real plant rather than simulating a
+        # parallel one - see ObserverBus for why that distinction matters.
+        self._ref_bus = ObserverBus(self._bus)
         self._subscribers: set[asyncio.Queue] = set()
         self._task: asyncio.Task | None = None
         self._frame: Frame | None = None
@@ -133,7 +141,11 @@ class TwinEngine:
             # Deterministic, so demos are reproducible.
             init_rng = random.Random(seed + index * 977)
             for mode in degradation.modes.values():
-                mode.level = round(init_rng.uniform(0.02, 0.17), 4)
+                # Seed as a fraction of *this mode's* threshold, not as an
+                # absolute level. A transmitter that needs recalibrating at
+                # 0.70 would otherwise boot a quarter of the way through its
+                # life while a bearing with a 1.0 threshold booted at a tenth.
+                mode.level = round(init_rng.uniform(0.02, 0.17) * mode.spec.threshold, 4)
 
             info = AssetInfo(
                 id=entry["id"],
@@ -178,17 +190,24 @@ class TwinEngine:
 
         order = list(self.assets.values())
 
-        # Pass 1 - the plant as it actually is.
+        # Real and reference are solved interleaved, asset by asset, rather
+        # than as two separate sweeps.
+        #
+        # That ordering matters more than it looks. Some signals are read a
+        # tick late by design - the chiller is solved before the reactor whose
+        # jacket duty it serves - so a reference sweep run *after* the real
+        # sweep would read this tick's value where its real counterpart read
+        # last tick's. The resulting one-tick mismatch shows up as a residual
+        # on every transient, and the console raises an alert about a
+        # scheduling artefact. Interleaving guarantees both copies of an asset
+        # observe the bus in exactly the same state.
         self._bus.begin_tick()
-        real: dict[str, dict[str, float]] = {}
-        for rt in order:
-            real[rt.info.id] = rt.model.solve(rt.state, rt.degradation.levels(), ctx, self._bus)
-
-        # Pass 2 - the same plant, as-new, under the same conditions.
         self._ref_bus.begin_tick()
         zero_levels: dict[str, float] = {}
+        real: dict[str, dict[str, float]] = {}
         reference: dict[str, dict[str, float]] = {}
         for rt in order:
+            real[rt.info.id] = rt.model.solve(rt.state, rt.degradation.levels(), ctx, self._bus)
             reference[rt.info.id] = rt.model.solve(rt.ref_state, zero_levels, ctx, self._ref_bus)
             rt.model.anchor_reference(rt.state, rt.ref_state)
 
@@ -276,15 +295,24 @@ class TwinEngine:
         self._frame = frame
         return frame
 
-    def prime(self, settle_ticks: int = 400) -> None:
-        """Run physics only, so dynamic states reach equilibrium before we watch.
+    def prime(self, settle_ticks: int = 300, warm_ticks: int | None = None) -> None:
+        """Bring the twin up ready to work, in two phases.
 
-        The reactor takes several residence times to settle, and the reference
-        model settles on a slightly different trajectory to the real one. If
-        the residual detector characterised "normal" during that transient it
-        would freeze a baseline taken from a plant that was still moving, and
-        then alarm on the settled steady state. Priming costs a few hundred
-        milliseconds at boot and removes that entire class of false positive.
+        **Settle** runs physics only. The reactor takes several residence
+        times to reach equilibrium, and the reference copy settles on a
+        slightly different trajectory to the real one. A detector that
+        characterised "normal" during that transient would freeze a baseline
+        taken from a plant that was still moving, then alarm on the settled
+        steady state.
+
+        **Warm** then runs real ticks, so the residual detectors fit their
+        baselines and the history buffers fill. Without it the service answers
+        every request for the first two minutes of its life with an empty
+        chart and a detector that structurally cannot alert - which is
+        indistinguishable, to anyone watching, from a plant with no problems.
+
+        Both phases together cost well under a second, and the twin is useful
+        on the first request it serves.
         """
         sim_time = 0.0
         for _ in range(settle_ticks):
@@ -295,11 +323,10 @@ class TwinEngine:
             sim_time += self.dt
             ctx = SimContext(dt=self.dt, sim_time=sim_time)
             self._bus.begin_tick()
-            for rt in self.assets.values():
-                rt.model.solve(rt.state, rt.degradation.levels(), ctx, self._bus)
             self._ref_bus.begin_tick()
             for rt in self.assets.values():
-                readings = rt.model.solve(rt.ref_state, {}, ctx, self._ref_bus)
+                readings = rt.model.solve(rt.state, rt.degradation.levels(), ctx, self._bus)
+                rt.model.solve(rt.ref_state, {}, ctx, self._ref_bus)
                 rt.model.anchor_reference(rt.state, rt.ref_state)
 
                 # Age the plant and record the wear trend while priming. The
@@ -311,6 +338,14 @@ class TwinEngine:
                 for name, mode in rt.degradation.modes.items():
                     self.rul.observe(rt.info.id, name, mode.spec.threshold, mode.level, sim_time)
         self.sim_time = sim_time
+
+        # Phase 2: real ticks, so detectors warm up and history fills.
+        for _ in range(warm_ticks if warm_ticks is not None else self.warmup_ticks + 30):
+            self.tick()
+
+        # Anything raised while the baselines were still being fitted is an
+        # artefact of the fit, not a finding. Start with a clean board.
+        self.anomaly.discard_all()
 
     def _apply_fault_rates(self) -> None:
         for aid, rt in self.assets.items():

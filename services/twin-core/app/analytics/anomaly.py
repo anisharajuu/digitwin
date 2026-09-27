@@ -220,8 +220,21 @@ class AnomalyEngine:
             self._open_by_key.pop(key, None)
 
     # -- alert access ------------------------------------------------------
+    #: Ranking order for the feed. Severity first, then how far off model.
+    _SEVERITY_RANK = {Severity.CRITICAL: 0, Severity.WARNING: 1, Severity.INFO: 2}
+
     def open_alerts(self) -> list[Alert]:
-        return [a for a in self._alerts.values() if a.cleared_at is None]
+        """Open alerts, worst first.
+
+        Ordering by severity and then by the size of the deviation puts the
+        asset that is actually failing at the top of the feed. Secondary
+        indications on neighbouring equipment - a chiller whose duty fell
+        because the pump feeding the line is worn - are real, and worth
+        showing, but they should not be what an operator reads first.
+        """
+        alerts = [a for a in self._alerts.values() if a.cleared_at is None]
+        alerts.sort(key=lambda a: (self._SEVERITY_RANK.get(a.severity, 3), -abs(a.z or 0.0)))
+        return alerts
 
     def open_count(self, asset_id: str) -> int:
         return sum(
@@ -240,6 +253,20 @@ class AnomalyEngine:
         if alert is not None:
             alert.acknowledged = True
         return alert
+
+    def discard_all(self) -> None:
+        """Forget every alert entirely, as opposed to clearing them.
+
+        Used once at the end of warm-up: an alert raised while a baseline was
+        still being fitted is an artefact of the fit, and leaving it in the
+        history would teach an operator that the feed is noisy.
+        """
+        self._alerts.clear()
+        self._open_by_key.clear()
+        for detector in self._detectors.values():
+            detector._breach_run = 0
+            detector._clear_run = 0
+            detector._ewma_z = 0.0
 
     def clear_for_asset(self, asset_id: str, sim_time: float) -> int:
         """Close every open alert on an asset, e.g. after maintenance."""

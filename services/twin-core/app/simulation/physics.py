@@ -87,10 +87,6 @@ class SimContext:
 class Bus:
     """Process signals shared between assets within a single solve pass.
 
-    The real and reference passes each get their own bus, so a degraded pump
-    starves a degraded exchanger while the reference exchanger still sees
-    design flow. That is what lets a fault propagate downstream honestly.
-
     The bus persists between ticks on purpose: an asset solved earlier in the
     ordering than its upstream source (the chiller reads the reactor's jacket
     duty) then sees last tick's value, which is a fair model of transport lag.
@@ -103,10 +99,21 @@ class Bus:
 
     def __init__(self) -> None:
         self._values: dict[str, float] = {}
+        self._previous: dict[str, float] = {}
 
     def begin_tick(self) -> None:
         for key in self.ACCUMULATORS:
+            # Keep last tick's total before zeroing. An asset solved *before*
+            # the ones that sum into a header - the surge tank sits upstream
+            # of the pumps that draw from it - has to read the previous
+            # total, or it reads the zero we just wrote.
+            self._previous[key] = self._values.get(key, 0.0)
             self._values[key] = 0.0
+
+    def previous(self, key: str, default: float = 0.0) -> float:
+        """Last tick's value of an accumulator, for upstream consumers."""
+        value = self._previous.get(key)
+        return default if value is None or value == 0.0 else value
 
     def get(self, key: str, default: float = 0.0) -> float:
         return self._values.get(key, default)
@@ -116,6 +123,44 @@ class Bus:
 
     def as_dict(self) -> dict[str, float]:
         return dict(self._values)
+
+
+class ObserverBus(Bus):
+    """Read-through view of the real plant, used for the reference pass.
+
+    This exists because of a real diagnostic failure. The reference pass used
+    to run on its own free-standing bus, so a worn pump starved the *real*
+    exchanger while the *reference* exchanger still saw design flow. Every
+    asset downstream of the fault then showed a large residual, and the
+    console duly raised alerts on the reactor and the chiller when the thing
+    that had actually failed was the pump. Worse, the reactor's jacket valve -
+    a controller output, whose entire job is to absorb upstream disturbance -
+    produced the loudest residual of all.
+
+    The fix is the one a real plant observer uses: each reference asset is fed
+    the *measured* conditions its real counterpart actually saw, and only its
+    own degradation is zeroed. Reads therefore come from the real bus; writes
+    go to a scratch dict and are discarded. The residual that survives is
+    local to the asset, so an alert names the machine that is at fault rather
+    than the first machine downstream of it.
+    """
+
+    def __init__(self, real: Bus) -> None:
+        super().__init__()
+        self._real = real
+
+    def get(self, key: str, default: float = 0.0) -> float:
+        return self._real.get(key, default)
+
+    def previous(self, key: str, default: float = 0.0) -> float:
+        return self._real.previous(key, default)
+
+    def set(self, key: str, value: float) -> None:
+        # Scratch only - a reference asset must never steer its neighbours.
+        self._values[key] = value
+
+    def begin_tick(self) -> None:
+        self._values.clear()
 
 
 # --------------------------------------------------------------------------- base
@@ -1025,7 +1070,9 @@ class Tank(AssetModel):
             temperature = 38.0
         else:
             # Feed surge tank: make-up trims to hold the level setpoint.
-            outflow = bus.get("feed_flow_m3h", 118.0)
+            # Lagged read - the pumps that empty this vessel are solved after
+            # it, so the live accumulator is still zero at this point.
+            outflow = bus.previous("feed_flow_m3h", 118.0)
             setpoint = float(d.get("initial_level_pct", 68.0))
             trim = clamp((setpoint - true_level) * 1.8, -35.0, 35.0)
             inflow = clamp(outflow + trim, 0.0, 260.0)

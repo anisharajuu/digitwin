@@ -1,0 +1,33 @@
+# Full stack: the simulation service behind an nginx-served console.
+#
+#   docker compose up --build   ->  console on :8080, API on :8000
+
+services:
+  twin-core:
+    build:
+      context: ./services/twin-core
+    image: digitwin/twin-core:1.0.0
+    container_name: digitwin-twin-core
+    environment:
+      # 60x means an hour of plant behaviour every wall-clock minute, which
+      # is fast enough for degradation to be visible in a demo.
+      TWIN_SIM_SPEED: "60"
+      TWIN_TICK_SECONDS: "1.0"
+      TWIN_HISTORY_POINTS: "3600"
+      TWIN_WARMUP_TICKS: "120"
+      TWIN_CORS_ORIGINS: "http://localhost:8080"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  console:
+    build:
+      context: ./apps/console
+    image: digitwin/console:1.0.0
+    container_name: digitwin-console
+    depends_on:
+      twin-core:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped

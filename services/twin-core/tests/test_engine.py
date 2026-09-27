@@ -155,3 +155,82 @@ def test_standby_asset_does_not_age_on_the_shelf(fresh_engine):
     for _ in range(200):
         engine.tick()
     assert engine.frame().assets["P-101B"].degradation == before
+
+
+def test_priming_leaves_the_twin_immediately_useful(fresh_engine):
+    """A freshly booted service must not look like a healthy plant by default.
+
+    Before warm-up was folded into boot, the first two minutes of every
+    process served empty charts and a detector that structurally could not
+    alert. That is indistinguishable, to anyone watching, from good news.
+    """
+    engine = fresh_engine
+    assert engine.anomaly.ready
+    assert engine.store.size() > 1_000
+    assert engine.tick_count > 100
+    assert engine.sim_time > 3_600
+
+
+def test_priming_raises_no_alerts_of_its_own(fresh_engine):
+    assert fresh_engine.anomaly.all_alerts() == []
+
+
+def test_work_orders_exist_from_the_first_request(fresh_engine):
+    """Theil-Sen needs history; priming supplies it, so the queue is never
+    empty purely because the process is young."""
+    assert fresh_engine.work_orders()
+
+
+def _alert_assets(frame) -> set[str]:
+    return {alert.asset_id for alert in frame.alerts}
+
+
+def test_a_fault_alerts_on_the_asset_that_has_it(fresh_engine):
+    """Regression: diagnosis must be local.
+
+    The reference pass originally ran as a free-standing parallel plant, so a
+    worn pump starved the real exchanger while the reference exchanger still
+    saw design flow. Every asset downstream lit up and the loudest alert of
+    all was the reactor's jacket valve - a controller output whose entire job
+    is to absorb upstream disturbance. Feeding each reference asset the
+    measured conditions its real counterpart saw is what fixed it.
+    """
+    engine = fresh_engine
+    engine.inject_fault("RX-301", "jacket_fouling", severity=0.9, ramp_hours=1.0)
+    for _ in range(200):
+        frame = engine.tick()
+
+    assert _alert_assets(frame) == {"RX-301"}
+
+
+def test_a_condition_fault_stays_on_its_own_asset(fresh_engine):
+    engine = fresh_engine
+    engine.inject_fault("AGT-301", "bearing_spall", severity=0.9, ramp_hours=1.0)
+    for _ in range(200):
+        frame = engine.tick()
+
+    assert _alert_assets(frame) == {"AGT-301"}
+    assert frame.assets["AGT-301"].values["vibration_mms"] > 4.0
+
+
+def test_the_failing_asset_leads_the_feed(fresh_engine):
+    """Secondary indications are real, but must not head the list."""
+    engine = fresh_engine
+    engine.inject_fault("P-101A", "impeller_erosion", severity=0.9, ramp_hours=1.0)
+    for _ in range(220):
+        frame = engine.tick()
+
+    assert frame.alerts
+    assert frame.alerts[0].asset_id == "P-101A"
+    pump_alerts = sum(1 for a in frame.alerts if a.asset_id == "P-101A")
+    assert pump_alerts > len(frame.alerts) / 2
+
+
+def test_the_surge_tank_outflow_tracks_the_pumps_it_feeds(fresh_engine):
+    """The tank is solved before the pumps that draw from it, so it reads a
+    lagged header total. If that read returned the freshly-zeroed accumulator
+    instead, the tank would report zero outflow and alarm every tick."""
+    frame = fresh_engine.tick()
+    tank = frame.assets["TK-101"].values
+    pump = frame.assets["P-101A"].values
+    assert tank["outflow_m3h"] == pytest.approx(pump["flow_m3h"], rel=0.05)
