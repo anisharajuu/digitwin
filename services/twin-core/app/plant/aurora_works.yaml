@@ -1,0 +1,215 @@
+# ---------------------------------------------------------------------------
+# Aurora Works - Line 1 (specialty chemicals)
+#
+# This file is the twin's "as-designed" registry: identity, topology, physical
+# placement and nameplate design data for every modelled asset. Sensor tags,
+# physics and degradation behaviour come from the model class bound to `kind`
+# (see app/simulation/physics.py), so this stays a pure configuration surface.
+# ---------------------------------------------------------------------------
+
+plant:
+  id: aurora-works
+  name: Aurora Works
+  line: Line 1 - Specialty Chemicals
+  location: Rotterdam, NL
+  timezone: Europe/Amsterdam
+  product: AX-22 intermediate
+  design_rate_tph: 115.0        # tonnes per hour at 100% rate
+  energy_tariff_eur_kwh: 0.142
+  grid_intensity_kg_co2_kwh: 0.268
+
+areas:
+  - { id: A10, name: Feed & Transfer,     colour: "#38bdf8" }
+  - { id: A20, name: Thermal Conditioning, colour: "#f59e0b" }
+  - { id: A30, name: Reaction,             colour: "#f43f5e" }
+  - { id: A40, name: Separation,           colour: "#a78bfa" }
+  - { id: A50, name: Product & Utilities,  colour: "#34d399" }
+
+assets:
+  # --------------------------------------------------------------- A10 feed
+  - id: TK-101
+    name: Feed Surge Tank
+    kind: tank
+    area: A10
+    criticality: medium
+    manufacturer: Vesselcraft
+    model: VC-40S
+    commissioned: 2019-06-11
+    position: [-20, 0, 0]
+    feeds: [P-101A, P-101B]
+    design:
+      volume_m3: 40.0
+      diameter_m: 3.2
+      initial_level_pct: 68.0
+      inflow_m3h: 118.0
+
+  - id: P-101A
+    name: Feed Pump A (duty)
+    kind: centrifugal_pump
+    area: A10
+    criticality: high
+    manufacturer: Grundfos
+    model: NK 125-400
+    commissioned: 2019-06-11
+    position: [-13, 0, -2.6]
+    feeds: [HX-201]
+    design:
+      rated_flow_m3h: 120.0
+      shutoff_head_m: 112.0
+      bep_flow_m3h: 118.0
+      bep_efficiency: 0.79
+      rated_speed_rpm: 1480
+      npsh_required_m: 4.2
+      fluid_density: 985.0
+      suction_pressure_bar: 1.35
+      motor_rated_kw: 45.0
+
+  - id: P-101B
+    name: Feed Pump B (standby)
+    kind: centrifugal_pump
+    area: A10
+    criticality: medium
+    manufacturer: Grundfos
+    model: NK 125-400
+    commissioned: 2019-06-11
+    position: [-13, 0, 2.6]
+    feeds: [HX-201]
+    standby: true
+    design:
+      rated_flow_m3h: 120.0
+      shutoff_head_m: 112.0
+      bep_flow_m3h: 118.0
+      bep_efficiency: 0.79
+      rated_speed_rpm: 1480
+      npsh_required_m: 4.2
+      fluid_density: 985.0
+      suction_pressure_bar: 1.35
+      motor_rated_kw: 45.0
+
+  # ------------------------------------------------------------ A20 thermal
+  - id: HX-201
+    name: Feed Preheater
+    kind: heat_exchanger
+    area: A20
+    criticality: high
+    manufacturer: Alfa Laval
+    model: ALT-820
+    commissioned: 2019-06-11
+    position: [-5, 0, 0]
+    feeds: [RX-301]
+    design:
+      ua_clean_kw_k: 120.0
+      hot_flow_kgs: 26.0
+      cold_flow_kgs: 20.0
+      cp_hot_kj_kgk: 2.18
+      cp_cold_kj_kgk: 3.42
+      hot_inlet_c: 148.0
+      cold_inlet_c: 24.0
+      design_dp_kpa: 62.0
+
+  - id: CHL-202
+    name: Process Chiller
+    kind: chiller
+    area: A20
+    criticality: medium
+    manufacturer: Trane
+    model: RTAF-220
+    commissioned: 2020-02-27
+    position: [-5, 0, 8]
+    feeds: [RX-301]
+    design:
+      rated_cooling_kw: 1200.0
+      rated_cop: 4.6
+      supply_setpoint_c: 7.0
+      ambient_c: 14.0
+
+  # ----------------------------------------------------------- A30 reaction
+  - id: RX-301
+    name: Jacketed Reactor
+    kind: reactor
+    area: A30
+    criticality: critical
+    manufacturer: Pfaudler
+    model: PF-16JR
+    commissioned: 2019-06-11
+    position: [4, 0, 0]
+    feeds: [SEP-401]
+    design:
+      volume_m3: 16.0
+      setpoint_c: 96.0
+      feed_temp_c: 97.0
+      jacket_ua_kw_k: 22.0
+      coolant_temp_c: 18.0
+      pre_exponential: 12900000.0
+      activation_energy_kj_mol: 62.5
+      heat_of_reaction_kj_mol: -78.0
+      feed_conc_mol_m3: 320.0
+      design_pressure_barg: 6.0
+
+  - id: AGT-301
+    name: Reactor Agitator Gearbox
+    kind: gearbox
+    area: A30
+    criticality: critical
+    manufacturer: SEW-Eurodrive
+    model: X3KS-190
+    commissioned: 2019-06-11
+    position: [4, 5.4, 0]
+    design:
+      rated_power_kw: 37.0
+      input_speed_rpm: 1475
+      ratio: 12.3
+      baseline_vibration_mms: 1.8
+      iso_10816_class: III
+
+  # --------------------------------------------------------- A40 separation
+  - id: SEP-401
+    name: Product Separator
+    kind: separator
+    area: A40
+    criticality: high
+    manufacturer: GEA
+    model: GS-900
+    commissioned: 2019-09-02
+    position: [13, 0, 0]
+    feeds: [TK-601]
+    design:
+      design_split_efficiency: 0.962
+      rated_throughput_tph: 120.0
+      rated_power_kw: 28.0
+
+  # ------------------------------------------------- A50 product & utilities
+  - id: CMP-501
+    name: Instrument Air Compressor
+    kind: compressor
+    area: A50
+    criticality: high
+    manufacturer: Atlas Copco
+    model: GA-160VSD
+    commissioned: 2020-11-04
+    position: [13, 0, 8]
+    design:
+      rated_flow_nm3h: 1550.0
+      discharge_pressure_bar: 7.5
+      inlet_temp_c: 22.0
+      polytropic_efficiency: 0.78
+      rated_power_kw: 160.0
+
+  - id: TK-601
+    name: Product Tank
+    kind: tank
+    area: A50
+    criticality: medium
+    manufacturer: Vesselcraft
+    model: VC-60S
+    commissioned: 2019-06-11
+    position: [21, 0, 0]
+    design:
+      volume_m3: 900.0
+      diameter_m: 11.0
+      initial_level_pct: 41.0
+      # Road-tanker export slot: a commercial schedule, not a process
+      # response. Held exogenous so both twin copies export in lockstep.
+      export_cycle_h: 6.0
+      export_window_h: 1.5
+      export_rate_m3h: 427.0
