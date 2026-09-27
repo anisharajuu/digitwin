@@ -43,7 +43,13 @@ describe('eur', () => {
   it('compacts only large values, and only when asked', () => {
     expect(eur(8900)).toBe('€8,900')
     expect(eur(8900, true)).toBe('€8,900')
-    expect(eur(41000, true)).toBe('€41K')
+    // Intl's compact suffix is case-inconsistent across ICU builds - macOS
+    // renders "41K", Linux "41k" - so assert the shape, not the casing.
+    expect(eur(41000, true)).toMatch(/^€41[kK]$/)
+  })
+
+  it('never shows fractional euros', () => {
+    expect(eur(8900.62)).toBe('€8,901')
   })
 })
 
