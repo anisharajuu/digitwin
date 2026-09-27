@@ -16,6 +16,35 @@ not a threshold someone guessed at.
 
 ---
 
+## What is real here, and what is simulated
+
+Stated up front, because it is the first thing any reviewer should be told.
+
+**There is no physical plant.** Aurora Works is a model. `twin-core` generates
+the sensor stream it then diagnoses, which means this repository is two things
+bolted together at a clean seam:
+
+- **A process simulator** — ten assets solved from first principles, with wear
+  mechanisms, operating-point-dependent stress, fault injection and
+  instrument noise. This stands in for the historian you would read in
+  production.
+- **A diagnostic layer** — residual detection, remaining-useful-life
+  projection, risk-ranked work orders and what-if costing. **This is the part
+  that would ship unchanged.** It consumes tag values and nothing else.
+
+That arrangement is deliberate, not a shortcut. You cannot put a chemical
+plant in a git repository, and you cannot honestly evaluate a detector against
+data whose ground truth you do not know. Here the ground truth is exactly
+known — the wear level of every mechanism at every instant — which is what
+makes claims like "silent across 800 samples of healthy noise" and "catches a
+0.9 mm/s drift" *measurable* rather than asserted. Every such claim in this
+README is an assertion in the test suite.
+
+The seam is the two functions in `TwinEngine.tick()` that produce `observed`
+and `expected`. Point the first at a real historian and the rest of the stack
+is unchanged. What a production deployment would still need is covered under
+[Honest limitations](#honest-limitations).
+
 ## The problem
 
 Conventional plant monitoring watches sensor values against fixed limits. It
@@ -169,11 +198,11 @@ with `make screenshots` against a running stack.
 
 ## Testing
 
-78 tests covering the physics, the analytics and the API.
+**106 tests** — 78 on the physics, analytics and API; 28 on the console.
 
 ```bash
-make test     # pytest
-make lint     # ruff + tsc
+make test     # pytest + vitest
+make lint     # ruff + eslint + tsc
 make check    # both
 ```
 
@@ -185,6 +214,13 @@ spike raises nothing; Theil–Sen recovers a known wear rate; a projection does
 not perturb the live twin; and — a regression test for a bug that took real
 debugging — **a fault alerts on the asset that has it**.
 
+On the console side the tests cover the parts with actual logic rather than
+the parts that are easy to assert: the stream provider must not double-count
+the frame twin-core replays on reconnect, must cap its history, and must
+survive a malformed frame without tearing down the socket; the API client
+must surface twin-core's own `detail` on a 4xx instead of a bare status code;
+and a flat KPI series must not divide by zero in the sparkline.
+
 ## Layout
 
 ```
@@ -194,7 +230,7 @@ services/twin-core/        FastAPI · simulation · analytics
   app/analytics/           residual detection, RUL, KPIs
   app/api/                 REST + WebSocket
   tests/                   78 tests
-apps/console/              React · TypeScript · three.js · Recharts
+apps/console/              React · TypeScript · three.js · Recharts (28 tests)
 docs/                      architecture, models, analytics, API
 scripts/screenshots.py     reproducible doc screenshots over CDP
 infra: Makefile · docker-compose.yml · GitHub Actions
@@ -204,6 +240,11 @@ infra: Makefile · docker-compose.yml · GitHub Actions
 
 A twin that oversells itself is worse than no twin at all.
 
+- **The plant is simulated, so the models are their own ground truth.** A
+  real deployment has to fit each asset model to a specific machine from
+  commissioning data, and keep it fitted as the machine is rebuilt. That
+  identification step is the hard, unglamorous half of a production twin and
+  it is not attempted here.
 - **Residuals are not perfectly stationary.** Some scale with load, so a large
   swing in operating point can move a z-score without any change in asset
   health. Secondary alerts on neighbouring equipment during a big upset are

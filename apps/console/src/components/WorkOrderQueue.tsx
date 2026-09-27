@@ -28,11 +28,15 @@ export default function WorkOrderQueue({ onSelect }: { onSelect?: (assetId: stri
     }
   }, [])
 
-  // Re-poll on the tick rather than on an independent timer, so the queue
-  // never shows a state the rest of the screen has moved past.
+  // Re-poll on a slow multiple of the tick rather than on an independent
+  // timer, so the queue never shows a state the rest of the screen has moved
+  // past. Extracted to a named value because a computed expression in a
+  // dependency array cannot be statically checked.
+  const pollEpoch = frame ? Math.floor(frame.tick / 20) : 0
+
   useEffect(() => {
     void load()
-  }, [load, frame?.tick && Math.floor(frame.tick / 20)])
+  }, [load, pollEpoch])
 
   if (orders === null) return <Empty>Loading work orders...</Empty>
   if (orders.length === 0) {

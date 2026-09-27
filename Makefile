@@ -33,11 +33,13 @@ dev: ## Run both, streaming logs together
 build: ## Production build of the console
 	cd $(CONSOLE) && npm run build
 
-test: ## Run the backend test suite
+test: ## Run both test suites
 	cd $(BACKEND) && uv run pytest -q
+	cd $(CONSOLE) && npm run test
 
 lint: ## Lint and typecheck both runtimes
 	cd $(BACKEND) && uv run ruff check . && uv run ruff format --check .
+	uv run --project $(BACKEND) ruff check .
 	cd $(CONSOLE) && npm run lint
 
 fmt: ## Auto-format the backend

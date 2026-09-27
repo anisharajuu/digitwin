@@ -110,6 +110,17 @@ class TagDetector:
         self._centre = centre
         self._scale = max(robust_sigma, self.noise_sigma, 1e-6)
 
+    def reset_run_state(self) -> None:
+        """Forget the current breach/clear run without refitting the baseline.
+
+        Used after maintenance and at the end of warm-up. The characterisation
+        of normal is still valid; what is no longer valid is the in-progress
+        judgement built on top of it.
+        """
+        self._breach_run = 0
+        self._clear_run = 0
+        self._ewma_z = 0.0
+
     @property
     def severity(self) -> Severity:
         magnitude = abs(self._ewma_z)
@@ -264,9 +275,7 @@ class AnomalyEngine:
         self._alerts.clear()
         self._open_by_key.clear()
         for detector in self._detectors.values():
-            detector._breach_run = 0
-            detector._clear_run = 0
-            detector._ewma_z = 0.0
+            detector.reset_run_state()
 
     def clear_for_asset(self, asset_id: str, sim_time: float) -> int:
         """Close every open alert on an asset, e.g. after maintenance."""
@@ -282,8 +291,7 @@ class AnomalyEngine:
         # Reset the detectors too - after an overhaul the baseline is new.
         for (aid, _tag), detector in self._detectors.items():
             if aid == asset_id:
-                detector._breach_run = 0
-                detector._ewma_z = 0.0
+                detector.reset_run_state()
         return closed
 
     @property
