@@ -1,4 +1,6 @@
 # Python
+# uv.lock IS committed: twin-core is a deployable service, so installs
+# should be reproducible and CI should cache against a real lockfile.
 __pycache__/
 *.py[cod]
 .venv/
@@ -7,7 +9,6 @@ venv/
 .ruff_cache/
 .mypy_cache/
 *.egg-info/
-uv.lock
 
 # Node
 node_modules/

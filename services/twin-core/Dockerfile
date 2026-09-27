@@ -10,15 +10,15 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/srv/.venv
 
-# Dependencies resolve from the manifests alone, so this layer only rebuilds
-# when they actually change.
-COPY pyproject.toml README.md ./
+# Dependency layer: resolves from the lockfile alone, so it only rebuilds when
+# the dependencies actually change - not on every source edit.
+COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv /srv/.venv && uv pip install --python /srv/.venv/bin/python .
+    uv sync --frozen --no-dev --no-install-project
 
 COPY app ./app
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python /srv/.venv/bin/python --no-deps .
+    uv sync --frozen --no-dev
 
 # ---- runtime -------------------------------------------------------------
 FROM python:3.12-slim AS runtime
