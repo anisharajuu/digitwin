@@ -30,7 +30,10 @@ export default function Reliability({ onSelect }: { onSelect: (assetId: string) 
   return (
     <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="flex min-h-0 flex-col gap-3">
-        <Panel title="Work-order queue - ranked by risk" className="min-h-[280px]">
+        <Panel
+          title="Work-order queue - ranked by risk"
+          className="min-h-[280px] overflow-hidden xl:max-h-[52vh]"
+        >
           <WorkOrderQueue onSelect={onSelect} />
         </Panel>
 
@@ -106,7 +109,7 @@ export default function Reliability({ onSelect }: { onSelect: (assetId: string) 
         </Panel>
       </div>
 
-      <Panel title="Alert history" className="min-h-[320px]">
+      <Panel title="Alert history" className="min-h-[320px] overflow-hidden xl:max-h-[calc(100vh-9rem)]">
         <AlertFeed onSelect={onSelect} limit={60} />
       </Panel>
     </div>

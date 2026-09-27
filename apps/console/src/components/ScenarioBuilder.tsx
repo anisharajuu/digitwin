@@ -307,10 +307,17 @@ export default function ScenarioBuilder() {
                   <CartesianGrid stroke="#1a2231" strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="day"
+                    type="number"
+                    domain={[0, result.horizon_days]}
+                    // The series is sampled ~160 times; labelling every point
+                    // produces a wall of "1.646 d". Whole days, evenly spaced.
+                    ticks={Array.from({ length: 7 }, (_, i) =>
+                      Math.round((result.horizon_days / 6) * i),
+                    )}
+                    tickFormatter={(v: number) => `${Math.round(v)} d`}
                     tick={{ fill: '#475569', fontSize: 10 }}
                     stroke="#1e2838"
                     tickLine={false}
-                    unit=" d"
                   />
                   <YAxis
                     tick={{ fill: '#475569', fontSize: 10 }}

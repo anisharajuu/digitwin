@@ -46,7 +46,7 @@ export default function AlertFeed({
   }
 
   return (
-    <ul className="flex flex-col gap-2 overflow-y-auto pr-1">
+    <ul className="flex h-full flex-col gap-2 overflow-y-auto pr-1">
       {alerts.map((alert) => {
         const style = SEVERITY_STYLE[alert.severity]
         const isAcked = alert.acknowledged || acked.has(alert.id)

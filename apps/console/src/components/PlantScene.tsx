@@ -428,6 +428,11 @@ export default function PlantScene({
         shadows
         dpr={[1, 1.75]}
         camera={{ position: [-2, 19, 41], fov: 40 }}
+        // Keeping the drawing buffer costs a little memory and buys two
+        // things: the view survives being read back (screenshot tooling and
+        // "save image as" both return the scene rather than a blank frame),
+        // and it composites reliably under software WebGL.
+        gl={{ preserveDrawingBuffer: true, antialias: true }}
         onPointerMissed={() => onSelect(null)}
       >
         <Suspense fallback={null}>

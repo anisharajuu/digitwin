@@ -69,7 +69,7 @@ export default function WorkOrderQueue({ onSelect }: { onSelect?: (assetId: stri
         </span>
       </div>
 
-      <ul className="flex flex-col gap-2 overflow-y-auto pr-1">
+      <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
         {orders.map((order) => {
           const key = `${order.asset_id}:${order.mode}`
           const style = SEVERITY_STYLE[order.severity]

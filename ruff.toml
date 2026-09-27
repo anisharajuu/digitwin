@@ -1,0 +1,9 @@
+# Root lint config. The twin-core service carries its own, stricter settings;
+# this covers the repo-level tooling in scripts/ so it is held to the same
+# standard as the service code.
+line-length = 100
+target-version = "py311"
+exclude = ["services/twin-core", "apps", "node_modules", ".venv"]
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]

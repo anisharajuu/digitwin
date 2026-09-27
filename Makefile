@@ -8,7 +8,7 @@ BACKEND := services/twin-core
 CONSOLE := apps/console
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev backend console build test lint fmt check clean docker
+.PHONY: help install dev backend console build test lint fmt check clean docker screenshots
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -44,6 +44,9 @@ fmt: ## Auto-format the backend
 	cd $(BACKEND) && uv run ruff format . && uv run ruff check --fix .
 
 check: lint test ## Everything CI runs
+
+screenshots: ## Regenerate the doc screenshots (needs the stack running)
+	cd $(BACKEND) && uv run python ../../scripts/screenshots.py --out ../../docs/images
 
 docker: ## Build and run the full stack
 	docker compose up --build

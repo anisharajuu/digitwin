@@ -62,7 +62,10 @@ export default function Overview({
           </Suspense>
         </Panel>
 
-        <div className="flex min-h-0 flex-col gap-3">
+        {/* Height-matched to the scene so the feed scrolls inside the
+            panel instead of stretching the page to the length of the
+            alert list. */}
+        <div className="flex min-h-0 flex-col gap-3 xl:h-[460px]">
           {chosen && chosenSnapshot && (
             <Panel title="Selected">
               <div className="flex items-start justify-between gap-2">
@@ -97,7 +100,7 @@ export default function Overview({
 
           <Panel
             title="Alerts"
-            className="min-h-[260px] flex-1"
+            className="min-h-[260px] flex-1 overflow-hidden"
             action={
               <span className="num pr-1 text-[10px] text-slate-600">
                 {frame?.alerts.length ?? 0} open

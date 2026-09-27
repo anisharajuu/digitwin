@@ -36,6 +36,10 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
+      - name: Lint repo tooling
+        working-directory: .
+        run: uv run --project services/twin-core ruff check .
+
   console:
     name: console (typescript)
     runs-on: ubuntu-latest

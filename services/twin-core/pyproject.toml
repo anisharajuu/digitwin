@@ -18,6 +18,9 @@ dev = [
     "pytest-asyncio>=0.24",
     "httpx>=0.27",
     "ruff>=0.7",
+    # scripts/screenshots.py drives Chrome over CDP. It arrives transitively
+    # via uvicorn[standard], but a doc tool should not depend on that.
+    "websockets>=13.0",
 ]
 
 [project.scripts]
