@@ -198,7 +198,7 @@ with `make screenshots` against a running stack.
 
 ## Testing
 
-**106 tests** — 78 on the physics, analytics and API; 28 on the console.
+**107 tests** — 78 on the physics, analytics and API; 29 on the console.
 
 ```bash
 make test     # pytest + vitest
@@ -230,7 +230,7 @@ services/twin-core/        FastAPI · simulation · analytics
   app/analytics/           residual detection, RUL, KPIs
   app/api/                 REST + WebSocket
   tests/                   78 tests
-apps/console/              React · TypeScript · three.js · Recharts (28 tests)
+apps/console/              React · TypeScript · three.js · Recharts (29 tests)
 docs/                      architecture, models, analytics, API
 scripts/screenshots.py     reproducible doc screenshots over CDP
 infra: Makefile · docker-compose.yml · GitHub Actions
